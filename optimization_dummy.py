@@ -55,6 +55,6 @@ def main():
     # start writing your own code from here
 
 
-##FUCK
+
 if __name__ == '__main__':
     main()
