@@ -47,3 +47,15 @@ logs: on
 save logs: yes
 
 ########## Simulation state - END ###########
+
+MESSAGE: state has been saved to files.
+
+MESSAGE: state has been saved to files.
+
+MESSAGE: state has been saved to files.
+
+MESSAGE: state has been saved to files.
+
+MESSAGE: state has been saved to files.
+
+MESSAGE: state has been saved to files.
