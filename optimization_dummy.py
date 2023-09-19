@@ -33,6 +33,7 @@ def update_mutation_rate(mutation_rates, overall_LR, coordinate_LR):
 
     return mutation_rates * np.exp(step_overall_LR+step_coordinate_LR)
 
+
 def initialize_population(env, experiment_name, lowerbound, upperbound,
                             population_size, n_vars):
 
@@ -78,6 +79,7 @@ def save_results(experiment_name, ini_g, best, mean, std):
         file.write('\n\ngen best mean std')
         file.write('\n'+str(ini_g)+' '+str(round(best,6))+' '+str(round(mean,6))+' '+str(round(std,6))   )
 
+
 def mutate_population(population ,mutation_step_sizes, learning_rate_overall, learning_rate_coordinate):
 
     offspring_mutation_rates = update_mutation_rate(mutation_rates=mutation_step_sizes, 
@@ -92,12 +94,9 @@ def mutate_population(population ,mutation_step_sizes, learning_rate_overall, le
 
         if mutation_prob < MUTATION_PROBABILITY:
 
-            print('MUTATION_PROB_IS_LESS')
-
             population[i] = mutants[i]
             mutation_step_sizes[i] = offspring_mutation_rates[i]
 
-    print(population)
     return population, mutation_step_sizes
 
 def round_robin(population, mutation_step_sizes, population_fitness):
@@ -189,13 +188,21 @@ def main():
         
         save_results(experiment_name=experiment_name, ini_g=generation, best=best_fitness, mean=mean, std=std)
 
-        print(population)
+        orig_population = population
 
         #mutate population
         population, mutation_step_sizes = mutate_population(population, learning_rate_overall=learning_rate_overall, 
                            learning_rate_coordinate=learning_rate_coordinate, mutation_step_sizes=mutation_step_sizes)
     
-        print(population)
+        mutated = 0
+        for i in range(len(population)):
+
+            if population[i] != orig_population[i]:
+
+                mutated += 1
+
+        print(mutated/len(population))
+            
 
 
         """
