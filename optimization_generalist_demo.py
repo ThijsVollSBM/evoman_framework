@@ -92,6 +92,7 @@ def evaluate(x):
 
 # tournament
 def tournament(pop):
+    
     c1 =  np.random.randint(0,pop.shape[0], 1)
     c2 =  np.random.randint(0,pop.shape[0], 1)
 

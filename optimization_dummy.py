@@ -156,6 +156,18 @@ def crossover(population, mutation_step_sizes):
 
     return offspring, offspring_mutation_rates
 
+# tournament
+def tournament(pop):
+    
+    c1 =  np.random.randint(0,pop.shape[0], 1)
+    c2 =  np.random.randint(0,pop.shape[0], 1)
+
+    if fit_pop[c1] > fit_pop[c2]:
+        return pop[c1][0]
+    else:
+        return pop[c2][0]
+
+
 def main():
 
     # choose this for not using visuals and thus making experiments faster
