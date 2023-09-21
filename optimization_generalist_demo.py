@@ -24,11 +24,12 @@ if headless:
 
 n_hidden_neurons = 10
 
-experiment_name = 'multi_demo'
+experiment_name = 'multi_demo_TEST2'
 if not os.path.exists(experiment_name):
     os.makedirs(experiment_name)
 
 # initializes simulation in multi evolution mode, for multiple static enemies.
+"""
 env = Environment(experiment_name=experiment_name,
                   enemies=[7,8],
                   multiplemode="yes",
@@ -37,7 +38,16 @@ env = Environment(experiment_name=experiment_name,
                   enemymode="static",
                   level=2,
                   speed="fastest",
-                  visuals=False)
+                  visuals=False) """
+
+env = Environment(experiment_name=experiment_name,
+                    enemies=[2],
+                    playermode="ai",
+                    player_controller=player_controller(n_hidden_neurons), # you  can insert your own controller here
+                    enemymode="static",
+                    level=2,
+                    speed="fastest",
+                    visuals=False)
 
 # default environment fitness is assumed for experiment
 
@@ -92,7 +102,7 @@ def evaluate(x):
 
 # tournament
 def tournament(pop):
-    
+
     c1 =  np.random.randint(0,pop.shape[0], 1)
     c2 =  np.random.randint(0,pop.shape[0], 1)
 

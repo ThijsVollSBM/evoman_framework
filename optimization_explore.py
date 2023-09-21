@@ -81,6 +81,7 @@ def save_results(experiment_name, ini_g, best, mean, std):
 
 def mutate_population(population ,mutation_step_sizes, learning_rate_overall, learning_rate_coordinate):
 
+
     offspring_mutation_rates = update_mutation_rate(mutation_rates=mutation_step_sizes, 
                                                    overall_LR=learning_rate_overall, 
                                                    coordinate_LR=learning_rate_coordinate)
@@ -124,8 +125,8 @@ def crossover(population, mutation_step_sizes, population_fitness):
 
     for i in range(0,population_size, 2):
 
-        p1_index = tournament(population,population_fitness)
-        p2_index = tournament(population,population_fitness)
+        p1_index = tournament(population_fitness)
+        p2_index = tournament(population_fitness)
 
         p1 = population[p1_index].copy()
         p1_sigma = mutation_step_sizes[p1_index]
@@ -156,8 +157,40 @@ def crossover(population, mutation_step_sizes, population_fitness):
 
     return offspring, offspring_mutation_rates
 
+def mean_child(population, mutation_step_sizes, population_fitness):
+
+    offspring = []
+
+    offspring_mutation_rates = []
+
+    for i in range(0,population_size, 2):
+
+        
+
+        p1_index = tournament(population_fitness)
+        p2_index = tournament(population_fitness)
+
+        p1 = population[p1_index].copy()
+        p1_sigma = mutation_step_sizes[p1_index]
+
+        p2 = population[p2_index].copy()
+        p2_sigma = mutation_step_sizes[p2_index]
+
+
+        child = np.mean([p1,p2],axis=0)
+
+        child_mutation_rate = np.mean([p1_sigma, p2_sigma])
+
+
+        offspring.append(child)
+
+        offspring_mutation_rates += child_mutation_rate
+
+
+    return offspring, offspring_mutation_rates
+
 # tournament
-def tournament(population, population_fitness):
+def tournament(population_fitness):
     
     c1_index = np.random.randint(population_size)
     c2_index = np.random.randint(population_size)
@@ -240,8 +273,8 @@ def main():
         save_results(experiment_name=experiment_name, ini_g=generation, best=best_fitness, mean=mean, std=std)
 
         #generate offspring by crossover
-        offspring, offspring_step_sizes = crossover(population, mutation_step_sizes, population_fitness)
-
+        offspring, offspring_step_sizes = mean_child(population, mutation_step_sizes, population_fitness)
+        
         #mutate offspring
         offspring, offspring_step_sizes = mutate_population(offspring, learning_rate_overall=learning_rate_overall, 
                            learning_rate_coordinate=learning_rate_coordinate, mutation_step_sizes=offspring_step_sizes)
@@ -268,8 +301,8 @@ last_best = 0
 lowerbound = -1
 upperbound = 1
 population_size = 100
-learning_rate_overall = 1/((2*population_size)**0.5)-0.03
-learning_rate_coordinate = 1/((2*(population_size**0.5))**0.5)-0.1
+learning_rate_overall = 1/((2*population_size)**0.5)+0.3
+learning_rate_coordinate = 1/((2*(population_size**0.5))**0.5)+0.7
 MUTATION_PROBABILITY = 0.8
 
 
