@@ -20,20 +20,6 @@ def simulation(env,x):
     f,p,e,t = env.play(pcont=x)
     return f
 
-
-def chunker(a_list, n):
-
-    """
-        Method to divide a list into a list of chunks with  equal size.
-
-        Parameters:
-            a: list to break in chunks.
-            n: number of chunks to create.
-    """
-
-    k, m = divmod(len(a_list), n)
-    return np.array((a_list[i*k+min(i, m):(i+1)*k+min(i+1, m)] for i in range(n)))
-
 # evaluation
 def evaluate(env, x):
     return np.array(list(map(lambda y: simulation(env,y), x)))
@@ -46,6 +32,7 @@ def update_mutation_rate(mutation_rates, overall_LR, coordinate_LR):
     step_coordinate_LR = coordinate_LR*np.random.normal(0,1,(len(mutation_rates),1))
 
     return mutation_rates * np.exp(step_overall_LR+step_coordinate_LR)
+
 
 def initialize_population(env, experiment_name, lowerbound, upperbound,
                             population_size, n_vars):
@@ -257,10 +244,11 @@ def main():
     # initializes simulation in individual evolution mode, for single static enemy.
     
     env = Environment(experiment_name=experiment_name,
-                    enemies=[2],
+                    enemies=[7,8],
                     playermode="ai",
                     player_controller=player_controller(n_hidden_neurons), # you  can insert your own controller here
                     enemymode="static",
+                    multiplemode='yes',
                     level=2,
                     speed="fastest",
                     visuals=False)
@@ -271,16 +259,7 @@ def main():
 
     # start writing your own code from here
 
-    """"
-    generations_max = 50
-    last_best = 0
-    lowerbound = -1
-    upperbound = 1
-    population_size = 100
-    learning_rate_overall = 1/((2*population_size)**0.5)*2
-    learning_rate_coordinate = 1/((2*(population_size**0.5))**0.5)*2
-    """
-
+    #initialize population
     population, population_fitness, mutation_step_sizes, generation = initialize_population(env=env, 
                                                                        experiment_name=experiment_name,
                                                                        lowerbound=lowerbound,
@@ -289,70 +268,99 @@ def main():
                                                                        n_vars=n_vars
                                                                        )
 
+    #########################################
+    #    User defined input parameters      #
+    #########################################
 
-    for i in range(generation+1, generations_max):
+    xmean = np.random.normal(size=n_vars)
+    sigma = 0.5
 
-        #mean of the population performance
-        mean = np.mean(population_fitness)
 
-        #std of the population performance
-        std = np.std(population_fitness)
 
-        #index of the best_solution
-        best_solution_index = np.argmax(population_fitness)
+    #########################################
+    # Strategy parameter setting: Selection #
+    #########################################
+    
 
-        #best performing individual
-        best_chromosome = population[best_solution_index]
+    #calculate lambda population size
+    offspring_size = int(4 + np.floor(3*np.log(n_vars)))
 
-        #fitness of this individual
-        best_fitness = population_fitness[best_solution_index]
+    #set mu first
+    mu = int(offspring_size/2)
+
+    #calculate the weights
+    weights = np.log(mu+1/2) - np.log(range(1,mu))
+
+    #floor mu to get the number of parents
+    mu = np.floor(mu)
+
+    #normalize the weights
+    weights = weights/sum(weights)
+
+    #calculate the effective size of mu
+    mu_eff = sum(weights)**2/sum(weights**2)
+
+    """B = eye(N); % B defines the coordinate system
+        39 D = eye(N); % diagonal matrix D defines the scaling
+        40 C = B*D*(B*D)’; % covariance matrix
+        41 eigeneval = 0; % B and D updated at counteval == 0
+        42 chiN=Nˆ0.5*(1-1/(4*N)+1/(21*Nˆ2)); % expectation of
+        """
+
+    cc = (4+mu_eff/n_vars / (n_vars+4 + 2*mu_eff/n_vars))
+
+    cs = (mu_eff+2) / (n_vars+mu_eff+5)
+
+    c1 = 2 / (((n_vars+1.3)**2)+mu_eff)
+
+    cmu = min(1-c1, (2*(mu_eff-2+(1/mu_eff)) / ((((n_vars+2)**2)+2*mu_eff)/2))); # for rank-mu update
+
+    damp_s = 1 + (2 * max(0, (np.sqrt(((mu_eff-1)/(n_vars+1)) - 1)))) + cs
+
+    pc = np.zeros((n_vars,)) 
+    ps = np.zeros((n_vars,)) 
+
+    B_eye = np.identity(n_vars)
+    D_eye = np.identity(n_vars)
+
+    C = B_eye*D_eye*(B_eye*D_eye).transpose()
+
+    eigeneval = 0
+
+    chiN = (n_vars**0.5)*(1-(1/(4*n_vars))+(1/(21*n_vars**2)))
+
+    offspring = np.zeros((offspring_size, n_vars))
+
+    for i in range(1):
+
+        child = np.random.normal(size=(n_vars))
+
+        child = xmean + (((B_eye @ D_eye) @ child) * sigma )
         
-        #mutation_rate of this individual
-        best_mutation_rate = mutation_step_sizes[best_solution_index]
-        
-        save_results(experiment_name=experiment_name, ini_g=generation, best=best_fitness, mean=mean, std=std)
+        offspring[i] =  child
 
-        #generate offspring by crossover
 
-        ranked_indices = np.argsort(population_fitness)
 
-        offspring, offspring_step_sizes = point_crossover(population[ranked_indices[-12:]], 
-                                                    mutation_step_sizes[ranked_indices[-12:]], 
-                                                    population_fitness[ranked_indices[-12:]], mode='random')
+    offspring_fitness = evaluate(env, offspring)   
 
-        #mutate offspring
-        offspring, offspring_step_sizes = mutate_population(offspring, learning_rate_overall=learning_rate_overall, 
-                           learning_rate_coordinate=learning_rate_coordinate, mutation_step_sizes=offspring_step_sizes)
+    print(offspring_fitness) 
 
-        #evaluate new solutions
-        offspring_fitness = evaluate(env, offspring)
+    print(offspring_fitness.shape)
 
-        print(offspring_fitness.shape)
 
-        population = np.vstack((population, offspring))
 
-        #cumulative fitness
-        population_fitness = np.concatenate((population_fitness, offspring_fitness))
 
-        #cumulative mutation step_sizes
-        mutation_step_sizes = np.concatenate((mutation_step_sizes,offspring_step_sizes))
 
-        population, mutation_step_sizes, population_fitness = round_robin(population, mutation_step_sizes, population_fitness)
-
-        generation += 1
-
-        
-        
 generations_max = 50
 last_best = 0
 lowerbound = -1
 upperbound = 1
 population_size = 300
-learning_rate_overall = 1/((2*population_size)**0.5)*2-0.2
-print(learning_rate_overall)
-learning_rate_coordinate = 1/((2*(population_size**0.5))**0.5)*2-0.2
-print(learning_rate_coordinate)
-MUTATION_PROBABILITY = 0.8
+#learning_rate_overall = 1/((2*population_size)**0.5)*2-0.2
+
+#learning_rate_coordinate = 1/((2*(population_size**0.5))**0.5)*2-0.2
+
+
 
 
 
