@@ -5711,3 +5711,9 @@ gen best mean std
 
 gen best mean std
 1 91.969562 55.1619 34.095217
+
+gen best mean std
+0 92.372379 10.792855 31.631911
+
+gen best mean std
+0 91.900134 8.636235 29.446433

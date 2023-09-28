@@ -236,6 +236,8 @@ notimproved = 0
 for i in range(ini_g+1, gens):
 
     offspring = crossover(pop)  # crossover
+    print(offspring)
+    print(offspring[0].shape)
     fit_offspring = evaluate(offspring)   # evaluation
     pop = np.vstack((pop,offspring))
     fit_pop = np.append(fit_pop,fit_offspring)

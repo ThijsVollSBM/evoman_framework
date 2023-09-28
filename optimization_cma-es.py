@@ -272,7 +272,7 @@ def main():
     #    User defined input parameters      #
     #########################################
 
-    xmean = np.random.normal(size=n_vars)
+    xmean = np.random.normal(size=(n_vars))
     sigma = 0.5
 
 
@@ -289,10 +289,10 @@ def main():
     mu = int(offspring_size/2)
 
     #calculate the weights
-    weights = np.log(mu+1/2) - np.log(range(1,mu))
+    weights = np.log(mu+1/2) - np.log(range(1,mu+1))
 
     #floor mu to get the number of parents
-    mu = np.floor(mu)
+    mu = int(np.floor(mu))
 
     #normalize the weights
     weights = weights/sum(weights)
@@ -315,8 +315,6 @@ def main():
 
     cmu = min(1-c1, (2*(mu_eff-2+(1/mu_eff)) / ((((n_vars+2)**2)+2*mu_eff)/2))); # for rank-mu update
 
-    damp_s = 1 + (2 * max(0, (np.sqrt(((mu_eff-1)/(n_vars+1)) - 1)))) + cs
-
     pc = np.zeros((n_vars,)) 
     ps = np.zeros((n_vars,)) 
 
@@ -331,23 +329,31 @@ def main():
 
     offspring = np.zeros((offspring_size, n_vars))
 
-    for i in range(1):
+    #generate and evaluate lambda amount of offspring:
 
-        child = np.random.normal(size=(n_vars))
+    arz = np.random.normal(size=(offspring_size,n_vars))
 
-        child = xmean + (((B_eye @ D_eye) @ child) * sigma )
-        
-        offspring[i] =  child
+    arx = np.zeros(arz.shape)
 
+    for i in range(offspring_size):
 
+        arx[i] = xmean + sigma*(B_eye @ D_eye @ arz[i])
 
-    offspring_fitness = evaluate(env, offspring)   
-
-    print(offspring_fitness) 
-
-    print(offspring_fitness.shape)
+    offspring_fitness = evaluate(env, arx)
 
 
+    #sort offspring, select mu amount of children, and recompute xmean and zmean
+
+    sorted_indices = np.argsort(-(offspring_fitness))
+    arx = arx[sorted_indices]
+    arz = arz[sorted_indices]
+
+    xmean = np.dot(weights, arx[:mu])
+    zmean = np.dot(weights, arz[:mu])
+
+
+
+    #xmean = arx(:,arindex(1:mu))*weights;
 
 
 
@@ -356,10 +362,6 @@ last_best = 0
 lowerbound = -1
 upperbound = 1
 population_size = 300
-#learning_rate_overall = 1/((2*population_size)**0.5)*2-0.2
-
-#learning_rate_coordinate = 1/((2*(population_size**0.5))**0.5)*2-0.2
-
 
 
 
