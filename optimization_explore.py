@@ -24,20 +24,16 @@ def simulation(env,x):
 def evaluate(env, x):
     return np.array(list(map(lambda y: simulation(env,y), x)))
 
-# update mutation rate
-def update_mutation_rate(mutation_rates, overall_LR, coordinate_LR):
-
-    step_overall_LR = overall_LR*np.random.normal(0,1)
-
-    step_coordinate_LR = coordinate_LR*np.random.normal(0,1,(100,1))
-
-    return mutation_rates * np.exp(step_overall_LR+step_coordinate_LR)
+# update mutation rate (explorative) : uniform sampling from [min(x), max(x)] - Page 57
+# There is no sigma for this kind of sampling.
+# We can later add some "step size" just to make sure there are new values being introduced 
+# to the gene pool each time and then
 
 
 def initialize_population(env, experiment_name, lowerbound, upperbound,
                             population_size, n_vars):
 
-    if not os.path.exists(experiment_name+'/evoman_solstate'):
+    if not os.path.exists(experiment_name+'/evoman_explorative'):
 
         print( '\nNEW EVOLUTION\n')
 
@@ -79,126 +75,58 @@ def save_results(experiment_name, ini_g, best, mean, std):
         file.write('\n\ngen best mean std')
         file.write('\n'+str(ini_g)+' '+str(round(best,6))+' '+str(round(mean,6))+' '+str(round(std,6))   )
 
-def mutate_population(population ,mutation_step_sizes, learning_rate_overall, learning_rate_coordinate):
+def update_mutations_uniformly(population):
 
+    return np.random.uniform(np.vstack(population).min(),
+                              np.vstack(population).max(),
+                              size = (100,265))
 
-    offspring_mutation_rates = update_mutation_rate(mutation_rates=mutation_step_sizes, 
-                                                   overall_LR=learning_rate_overall, 
-                                                   coordinate_LR=learning_rate_coordinate)
+def mutate_population(some_population):
 
-    mutants = np.add(population,offspring_mutation_rates*np.random.normal(0,1,(100,1)))
-
-    for i in range(len(mutants)):
+    mutated_offspring = update_mutations_uniformly(population=some_population)
+    for i in range(len(mutated_offspring)):
 
         mutation_prob = np.random.uniform()
 
         if mutation_prob < MUTATION_PROBABILITY:
 
-            population[i] = mutants[i]
-            mutation_step_sizes[i] = offspring_mutation_rates[i]
+            some_population[i] = mutated_offspring[i]
 
-    return population, mutation_step_sizes
+    return some_population
 
-def round_robin(population, mutation_step_sizes, population_fitness):
-
-    scores = np.zeros(population_fitness.shape)
-
-    for i in range(len(population)):
-        
-        fitness = population_fitness[i]
-
-        enemies = np.random.randint(low=1, high=len(population_fitness),size=10)
-
-        score = (population_fitness[enemies] < fitness).sum()
-
-        scores[i] = score
-      
-    indices = np.argsort(scores)
-
-    return population[indices[-100:]], mutation_step_sizes[indices[-100:]], population_fitness[indices[-100:]]
-
-def crossover(population, mutation_step_sizes, population_fitness):
+def crossover(population, new_step_size_prob):
 
     offspring = []
 
-    offspring_mutation_rates = []
-
     for i in range(0,population_size, 2):
 
-        p1_index = tournament(population_fitness)
-        p2_index = tournament(population_fitness)
+        p1_index = np.random.randint(population_size)
+        p2_index = np.random.randint(population_size)
 
         p1 = population[p1_index].copy()
-        p1_sigma = mutation_step_sizes[p1_index]
 
         p2 = population[p2_index].copy()
-        p2_sigma = mutation_step_sizes[p2_index]
 
         bools = np.random.choice(a=[False, True], size=p1.shape)
 
         for i in range(len(bools)):
-            
             #if True, swap the genome of the two parents
             if bools[i]:
-
                 p1[i], p2[i] = p2[i], p1[i]
+        new_solution = [p1, p2]
 
-        if np.random.uniform() < 0.5:
-
-            offspring_mutation_rates += [p1_sigma, p2_sigma]
-
-        else:
-
-            offspring_mutation_rates += [p2_sigma, p1_sigma]
-
-
-        offspring += [p1, p2]
-
-
-    return offspring, offspring_mutation_rates
-
-def mean_child(population, mutation_step_sizes, population_fitness):
-
-    offspring = []
-
-    offspring_mutation_rates = []
-
-    for i in range(0,population_size, 2):
+        for gene in range(len(new_solution)):
+            if np.random.uniform() < new_step_size_prob:
+                new_solution[gene] += np.random.normal(0,1)
 
         
+        offspring += new_solution
 
-        p1_index = tournament(population_fitness)
-        p2_index = tournament(population_fitness)
+    return offspring
 
-        p1 = population[p1_index].copy()
-        p1_sigma = mutation_step_sizes[p1_index]
-
-        p2 = population[p2_index].copy()
-        p2_sigma = mutation_step_sizes[p2_index]
-
-
-        child = np.mean([p1,p2],axis=0)
-
-        child_mutation_rate = np.mean([p1_sigma, p2_sigma])
-
-
-        offspring.append(child)
-
-        offspring_mutation_rates += child_mutation_rate
-
-
-    return offspring, offspring_mutation_rates
-
-# tournament
-def tournament(population_fitness):
-    
-    c1_index = np.random.randint(population_size)
-    c2_index = np.random.randint(population_size)
-
-    if population_fitness[c1_index] > population_fitness[c2_index]:
-        return c1_index
-    else:
-        return c2_index
+# def survival_selection(offspring, offspring_fitness): 
+#     #age_based: kill all parents, and keep only children.. effectively return crossover() values
+#     return offspring, offspring_fitness
 
 
 def main():
@@ -209,7 +137,7 @@ def main():
         os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 
-    experiment_name = 'round_robin_selection'
+    experiment_name = 'evoman_explorative'
     if not os.path.exists(experiment_name):
         os.makedirs(experiment_name)
 
@@ -230,16 +158,6 @@ def main():
     # number of weights for multilayer with 10 hidden neurons
     n_vars = (env.get_num_sensors()+1)*n_hidden_neurons + (n_hidden_neurons+1)*5
 
-    
-    # start writing your own code from here
-
-    generations_max = 50
-    last_best = 0
-    lowerbound = -1
-    upperbound = 1
-    population_size = 100
-    learning_rate_overall = 1/((2*population_size)**0.5)
-    learning_rate_coordinate = 1/((2*(population_size**0.5))**0.5)
 
     population, population_fitness, mutation_step_sizes, generation = initialize_population(env=env, 
                                                                        experiment_name=experiment_name,
@@ -261,48 +179,36 @@ def main():
         #index of the best_solution
         best_solution_index = np.argmax(population_fitness)
 
-        #best performing individual
-        best_chromosome = population[best_solution_index]
-
         #fitness of this individual
         best_fitness = population_fitness[best_solution_index]
         
         #mutation_rate of this individual
-        best_mutation_rate = mutation_step_sizes[best_solution_index]
+        #best_mutation_rate = mutation_step_sizes[best_solution_index]
         
         save_results(experiment_name=experiment_name, ini_g=generation, best=best_fitness, mean=mean, std=std)
 
         #generate offspring by crossover
-        offspring, offspring_step_sizes = mean_child(population, mutation_step_sizes, population_fitness)
-        
+        offspring = crossover(population, new_step_size_prob)
+
         #mutate offspring
-        offspring, offspring_step_sizes = mutate_population(offspring, learning_rate_overall=learning_rate_overall, 
-                           learning_rate_coordinate=learning_rate_coordinate, mutation_step_sizes=offspring_step_sizes)
+        offspring = mutate_population(offspring)
+        offspring = np.vstack(offspring)
 
-        #evaluate new solutions
+        #Just follow the naming conventions of the exploit code
+        population = offspring
         offspring_fitness = evaluate(env, offspring)
-
-        population = np.vstack((population, offspring))
-
-        #cumulative fitness
-        population_fitness = np.concatenate((population_fitness, offspring_fitness))
-
-        #cumulative mutation step_sizes
-        mutation_step_sizes = np.concatenate((mutation_step_sizes,offspring_step_sizes))
-
-        population, mutation_step_sizes, population_fitness = round_robin(population, mutation_step_sizes, population_fitness)
-
+        population_fitness = offspring_fitness
+        
         generation += 1
 
         
         
 generations_max = 50
+new_step_size_prob = 0.5
 last_best = 0
 lowerbound = -1
 upperbound = 1
 population_size = 100
-learning_rate_overall = 1/((2*population_size)**0.5)+0.3
-learning_rate_coordinate = 1/((2*(population_size**0.5))**0.5)+0.7
 MUTATION_PROBABILITY = 0.8
 
 
