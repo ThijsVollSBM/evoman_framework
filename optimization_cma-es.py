@@ -307,13 +307,15 @@ def main():
         42 chiN=Nˆ0.5*(1-1/(4*N)+1/(21*Nˆ2)); % expectation of
         """
 
-    cc = (4+mu_eff/n_vars / (n_vars+4 + 2*mu_eff/n_vars))
+    cc = ((4+mu_eff/n_vars) / (n_vars+4 + 2*mu_eff/n_vars))
 
     cs = (mu_eff+2) / (n_vars+mu_eff+5)
 
     c1 = 2 / (((n_vars+1.3)**2)+mu_eff)
 
     cmu = min(1-c1, (2*(mu_eff-2+(1/mu_eff)) / ((((n_vars+2)**2)+2*mu_eff)/2))); # for rank-mu update
+
+    damps = 1+2*max(0,np.sqrt((mu_eff-1)/(n_vars+1))-1) + cs
 
     pc = np.zeros((n_vars,)) 
     ps = np.zeros((n_vars,)) 
@@ -324,6 +326,8 @@ def main():
     C = B_eye*D_eye*(B_eye*D_eye).transpose()
 
     eigeneval = 0
+
+    counteval = 0
 
     chiN = (n_vars**0.5)*(1-(1/(4*n_vars))+(1/(21*n_vars**2)))
 
@@ -351,11 +355,32 @@ def main():
     xmean = np.dot(weights, arx[:mu])
     zmean = np.dot(weights, arz[:mu])
 
+    ps = (1-cs)*ps + np.sqrt(cs*(2-cs)*mu_eff) * (B_eye @ zmean)
+    hsig = (np.linalg.norm(ps)/np.sqrt(1-(1-cs)**(counteval/population_size))) / chiN < 1.4+2/(n_vars+1)
+
+    pc = (1-cc)*pc + hsig * np.sqrt(cc*(2-cc)*mu_eff) * (B_eye@D_eye@zmean)
+
+    element1 = (1-c1-cmu) * C
+
+    element2 = c1 * (pc*pc.transpose())
+    
+    test = cmu * (B_eye@D_eye@arz[:mu]) @ np.diag(weights) @ (B_eye@D_eye@arz[:mu])
+
+    print(C.shape)
+    C = (1-c1-cmu) * C + c1 * (pc*pc.transpose() + (1-hsig) * cc*(2-cc) * C) + cmu * (B_eye@D_eye@arz[:mu].transpose()) @ np.diag(weights) @ (B_eye@D_eye@arz[:mu].transpose())
+    print(C.shape) 
 
 
-    #xmean = arx(:,arindex(1:mu))*weights;
 
-
+    """
+    % Adapt covariance matrix C
+    69 C = (1-c1-cmu) * C ... % regard old matrix % Eq. 47
+    70 + c1 * (pc*pc’ ... % plus rank one update
+    71 + (1-hsig) * cc*(2-cc) * C) ... % minor correction
+    72 + cmu ... % plus rank mu update
+    73 * (B*D*arz(:,arindex(1:mu))) ...
+    74 * diag(weights) * (B*D*arz(:,arindex(1:mu)))’;
+    """
 
 generations_max = 50
 last_best = 0
