@@ -107,26 +107,42 @@ def crossover(population, new_step_size_prob):
 
         p2 = population[p2_index].copy()
 
-        bools = np.random.choice(a=[False, True], size=p1.shape)
-
-        for i in range(len(bools)):
+        bools1 = np.random.choice(a=[False, True], size=p1.shape)
+        bools2 = np.random.choice(a=[False, True], size=p1.shape)
+        
+        for i in range(len(bools1)):
             #if True, swap the genome of the two parents
-            if bools[i]:
+            if bools1[i]:
                 p1[i], p2[i] = p2[i], p1[i]
+
         new_solution = [p1, p2]
 
         for gene in range(len(new_solution)):
             if np.random.uniform() < new_step_size_prob:
                 new_solution[gene] += np.random.normal(0,1)
 
-        
+        offspring += new_solution
+
+        for j in range(len(bools2)):
+            if bools2[j]:
+                p1[j], p2[j] = p2[j], p1[j]
+
+        new_solution = [p1, p2]
+
+        for gene in range(len(new_solution)):
+            if np.random.uniform() < new_step_size_prob:
+                new_solution[gene] += np.random.normal(0,1)
+
         offspring += new_solution
 
     return offspring
 
-# def survival_selection(offspring, offspring_fitness): 
-#     #age_based: kill all parents, and keep only children.. effectively return crossover() values
-#     return offspring, offspring_fitness
+def survival_selection(offspring, offspring_fitness): 
+    #age_based: kill all parents, and keep only children.. effectively return crossover() values
+    indecies = np.argsort(offspring_fitness)
+    offspring = offspring[indecies[-100:]]
+    offspring_fitness = offspring_fitness[indecies[-100:]]
+    return offspring, offspring_fitness
 
 
 def main():
@@ -178,7 +194,6 @@ def main():
 
         #index of the best_solution
         best_solution_index = np.argmax(population_fitness)
-
         #fitness of this individual
         best_fitness = population_fitness[best_solution_index]
         
@@ -193,12 +208,15 @@ def main():
         #mutate offspring
         offspring = mutate_population(offspring)
         offspring = np.vstack(offspring)
+        
+        #survival selection
+        offspring_fitness = evaluate(env, offspring)
+        offspring, offspring_fitness = survival_selection(offspring, offspring_fitness)
 
         #Just follow the naming conventions of the exploit code
         population = offspring
-        offspring_fitness = evaluate(env, offspring)
         population_fitness = offspring_fitness
-        
+
         generation += 1
 
         
