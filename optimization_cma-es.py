@@ -348,11 +348,14 @@ def main():
         for i in range(offspring_size):
 
             arx[i] = xmean + sigma*(B_eye @ D_eye @ arz[i])
+            print(arx[i])
+
 
         offspring_fitness = evaluate(env, arx)
+        #print(offspring_fitness)
 
         #sort offspring, select mu amount of children, and recompute xmean and zmean
-        sorted_indices = np.argsort(-(offspring_fitness))
+        sorted_indices = np.argsort(-offspring_fitness)
         arx = arx[sorted_indices]
         arz = arz[sorted_indices]
 
@@ -379,6 +382,8 @@ def main():
             D_eye = np.diag(np.sqrt(np.diag(D_eye)))
 
         #TODO: include break for satisfactory fitness
+
+        print(80*'*')
         print(max(offspring_fitness))
         print(min(offspring_fitness))
 
