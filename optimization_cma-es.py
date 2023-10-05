@@ -14,7 +14,7 @@ from demo_controller import player_controller
 # imports other libs
 import numpy as np
 import os
-from scipy.linalg import eig
+from numpy import linalg as LA
 
 # runs simulation
 def simulation(env,x):
@@ -327,7 +327,7 @@ def main():
     B_eye = np.identity(n_vars)
     D_eye = np.identity(n_vars)
 
-    C = B_eye @ D_eye@(B_eye@D_eye).T
+    C = B_eye * D_eye * (B_eye*D_eye).T
 
     eigeneval = 0
 
@@ -339,8 +339,6 @@ def main():
 
         counteval += 1
 
-        offspring = np.zeros((offspring_size, n_vars))
-
         #generate and evaluate lambda amount of offspring:
         arz = np.random.normal(size=(offspring_size,n_vars))
         arx = np.zeros(arz.shape)
@@ -348,11 +346,9 @@ def main():
         for i in range(offspring_size):
 
             arx[i] = xmean + sigma*(B_eye @ D_eye @ arz[i])
-            print(arx[i])
-
+            
 
         offspring_fitness = evaluate(env, arx)
-        #print(offspring_fitness)
 
         #sort offspring, select mu amount of children, and recompute xmean and zmean
         sorted_indices = np.argsort(-offspring_fitness)
@@ -360,6 +356,7 @@ def main():
         arz = arz[sorted_indices]
 
         xmean = np.dot(weights, arx[:mu])
+        
         zmean = np.dot(weights, arz[:mu])
 
         #update evolution paths
@@ -378,15 +375,15 @@ def main():
         if counteval - eigeneval > population_size / (1 + cmu) / n_vars / 10:
             eigeneval = counteval
             C = np.triu(C,k=0) + np.triu(C, k=1)
-            B_eye,D_eye = eig(C)
+            D_eye, B_eye = LA.eigh(C)
             D_eye = np.diag(np.sqrt(np.diag(D_eye)))
 
+
+        """in MatLab, the eig function returns eigenvectors, eigenvalues,  
+        but numpy returns eigenvalues, eigenvectors so flipped the return statement"""
+
+
         #TODO: include break for satisfactory fitness
-
-        print(80*'*')
-        print(max(offspring_fitness))
-        print(min(offspring_fitness))
-
 
 
 generations_max = 50
