@@ -331,6 +331,8 @@ def main():
 
     chiN = (n_vars**0.5)*(1-(1/(4*n_vars))+(1/(21*n_vars**2)))
 
+    print(chiN)
+
     offspring = np.zeros((offspring_size, n_vars))
 
     #generate and evaluate lambda amount of offspring:
@@ -360,17 +362,8 @@ def main():
 
     pc = (1-cc)*pc + hsig * np.sqrt(cc*(2-cc)*mu_eff) * (B_eye@D_eye@zmean)
 
-    element1 = (1-c1-cmu) * C
-
-    element2 = c1 * (pc*pc.transpose())
+    C = (1-c1-cmu) * C + c1 * (pc*pc.transpose() + (1-hsig) * cc*(2-cc) * C) + cmu * (B_eye@D_eye@arz[:mu].transpose()) @ np.diag(weights) @ (B_eye@D_eye@arz[:mu].transpose()).T
     
-    test = cmu * (B_eye@D_eye@arz[:mu]) @ np.diag(weights) @ (B_eye@D_eye@arz[:mu])
-
-    print(C.shape)
-    C = (1-c1-cmu) * C + c1 * (pc*pc.transpose() + (1-hsig) * cc*(2-cc) * C) + cmu * (B_eye@D_eye@arz[:mu].transpose()) @ np.diag(weights) @ (B_eye@D_eye@arz[:mu].transpose())
-    print(C.shape) 
-
-
 
     """
     % Adapt covariance matrix C

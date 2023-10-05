@@ -14,15 +14,27 @@ from demo_controller import player_controller
 # imports other libs
 import numpy as np
 import os
+import pandas as pd
 
 # runs simulation
-def simulation(env,x):
+def simulation(env,x,mode):
     f,p,e,t = env.play(pcont=x)
-    return f
+
+    #f = fitness
+    #p = player life
+    #e = enemy life
+    #t = time
+
+    if mode == 'evaluate':
+        return f
+    
+    if mode == 'gain':
+        return f,p,e,t
+
 
 # evaluation
 def evaluate(env, x):
-    return np.array(list(map(lambda y: simulation(env,y), x)))
+    return np.array(list(map(lambda y: simulation(env,y, mode='evaluate'), x)))
 
 # update mutation rate (explorative) : uniform sampling from [min(x), max(x)] - Page 57
 # There is no sigma for this kind of sampling.
@@ -107,29 +119,45 @@ def crossover(population, new_step_size_prob):
 
         p2 = population[p2_index].copy()
 
-        bools = np.random.choice(a=[False, True], size=p1.shape)
-
-        for i in range(len(bools)):
+        bools1 = np.random.choice(a=[False, True], size=p1.shape)
+        bools2 = np.random.choice(a=[False, True], size=p1.shape)
+        
+        for i in range(len(bools1)):
             #if True, swap the genome of the two parents
-            if bools[i]:
+            if bools1[i]:
                 p1[i], p2[i] = p2[i], p1[i]
+
         new_solution = [p1, p2]
 
         for gene in range(len(new_solution)):
             if np.random.uniform() < new_step_size_prob:
                 new_solution[gene] += np.random.normal(0,1)
 
-        
+        offspring += new_solution
+
+        for j in range(len(bools2)):
+            if bools2[j]:
+                p1[j], p2[j] = p2[j], p1[j]
+
+        new_solution = [p1, p2]
+
+        for gene in range(len(new_solution)):
+            if np.random.uniform() < new_step_size_prob:
+                new_solution[gene] += np.random.normal(0,1)
+
         offspring += new_solution
 
     return offspring
 
-# def survival_selection(offspring, offspring_fitness): 
-#     #age_based: kill all parents, and keep only children.. effectively return crossover() values
-#     return offspring, offspring_fitness
+def survival_selection(offspring, offspring_fitness): 
+    #age_based: kill all parents, and keep only children.. effectively return crossover() values
+    indecies = np.argsort(offspring_fitness)
+    offspring = offspring[indecies[-100:]]
+    offspring_fitness = offspring_fitness[indecies[-100:]]
+    return offspring, offspring_fitness
 
 
-def main():
+def main(enemy_num, run_nr):
 
     # choose this for not using visuals and thus making experiments faster
     headless = True
@@ -147,7 +175,7 @@ def main():
     # initializes simulation in individual evolution mode, for single static enemy.
     
     env = Environment(experiment_name=experiment_name,
-                    enemies=[2],
+                    enemies=[enemy_num],
                     playermode="ai",
                     player_controller=player_controller(n_hidden_neurons), # you  can insert your own controller here
                     enemymode="static",
@@ -178,9 +206,12 @@ def main():
 
         #index of the best_solution
         best_solution_index = np.argmax(population_fitness)
-
         #fitness of this individual
         best_fitness = population_fitness[best_solution_index]
+
+        dicty = {'mean':mean, 'best':best_fitness, 'std':std, 'generation':generation}
+        
+        data.append(dicty)
         
         #mutation_rate of this individual
         #best_mutation_rate = mutation_step_sizes[best_solution_index]
@@ -193,17 +224,36 @@ def main():
         #mutate offspring
         offspring = mutate_population(offspring)
         offspring = np.vstack(offspring)
+        
+        #survival selection
+        offspring_fitness = evaluate(env, offspring)
+        offspring, offspring_fitness = survival_selection(offspring, offspring_fitness)
 
         #Just follow the naming conventions of the exploit code
         population = offspring
-        offspring_fitness = evaluate(env, offspring)
         population_fitness = offspring_fitness
-        
+
         generation += 1
+
+
+    #index of the best_solution
+    best_solution_index = np.argmax(population_fitness)
+
+    gains = []
+
+    for i in range(5):
+
+        _, p, e, _ = simulation(env, population[best_solution_index], mode='gain')
+
+        gain = float(p-e)
+
+        gains.append(gain)
+
+    return np.mean(gains)
 
         
         
-generations_max = 50
+generations_max = 32
 new_step_size_prob = 0.5
 last_best = 0
 lowerbound = -1
@@ -212,7 +262,31 @@ population_size = 100
 MUTATION_PROBABILITY = 0.8
 
 
-
-
 if __name__ == '__main__':
-    main()
+
+    mean_gains_for_all_enemies = dict()
+
+    enemies = [1,4,5]
+
+    mean_gains = []
+
+    for enemy in enemies:
+
+        data = []
+
+        for run_nr in range(0,10):
+
+            mean_gain = main(enemy, run_nr)
+            mean_gains.append(mean_gain)
+
+        mean_gains_for_all_enemies[enemy] = mean_gains
+
+        results = pd.DataFrame.from_records(data)
+
+        filename = f'results/enemy_{enemy}_results_EXPLORE.csv'
+
+        results.to_csv(filename)
+
+    gains_df = pd.DataFrame.from_dict(mean_gains_for_all_enemies)
+
+    gains_df.to_csv('results/mean_gains_explore.csv')
