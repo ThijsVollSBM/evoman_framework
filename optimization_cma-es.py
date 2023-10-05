@@ -80,152 +80,6 @@ def save_results(experiment_name, ini_g, best, mean, std):
         file.write('\n\ngen best mean std')
         file.write('\n'+str(ini_g)+' '+str(round(best,6))+' '+str(round(mean,6))+' '+str(round(std,6))   )
 
-def mutate_population(population ,mutation_step_sizes, learning_rate_overall, learning_rate_coordinate):
-
-
-    offspring_mutation_rates = update_mutation_rate(mutation_rates=mutation_step_sizes, 
-                                                   overall_LR=learning_rate_overall, 
-                                                   coordinate_LR=learning_rate_coordinate)
-
-    mutants = np.add(population,offspring_mutation_rates*np.random.normal(0,1,(len(population),1)))
-
-    for i in range(len(mutants)):
-
-        mutation_prob = np.random.uniform()
-
-        if mutation_prob < MUTATION_PROBABILITY:
-
-            population[i] = mutants[i]
-            mutation_step_sizes[i] = offspring_mutation_rates[i]
-
-    return population, mutation_step_sizes
-
-def round_robin(population, mutation_step_sizes, population_fitness):
-
-    scores = np.zeros(population_fitness.shape)
-
-    for i in range(len(population)):
-        
-        fitness = population_fitness[i]
-
-        enemies = np.random.randint(low=1, high=len(population_fitness),size=10)
-
-        score = (population_fitness[enemies] < fitness).sum()
-
-        scores[i] = score
-      
-    indices = np.argsort(scores)
-
-    return population[indices[-100:]], mutation_step_sizes[indices[-100:]], population_fitness[indices[-100:]]
-
-def point_crossover(parents, mutation_step_sizes, population_fitness, mode='random', n_points=None):
-
-    if mode == 'random':
-
-        return random_crossover(parents, mutation_step_sizes, population_fitness)
-
-    assert n_points is not None
-
-    offspring = []
-
-    offspring_mutation_rates = []
-
-    for i in range(0,len(parents), 2):
-
-        p1 = parents[i].copy()
-        p1_sigma = mutation_step_sizes[i]
-
-        p2 = parents[i+1].copy()
-        p2_sigma = mutation_step_sizes[i+1]
-
-        for j in range(10):
-
-            c1 = p1.copy()
-            c2 = p2.copy()
-
-            c1_sigma = p1_sigma.copy()
-            c2_sigma = p2_sigma.copy()
-
-            c1_chunks = np.reshape(c1, (-1, n_points))
-            c2_chunks = np.reshape(c2, (-1, n_points))
-
-            #perform the crossover based on a boolean map
-            for genome_set in range(0, n_points, 2):
-                
-                c1_chunks[genome_set], c2_chunks[genome_set] = c2_chunks[genome_set], c1_chunks[genome_set]
-
-
-            if np.random.uniform() < 0.5:
-
-                offspring_mutation_rates += [c1_sigma, c2_sigma]
-
-            else:
-
-                offspring_mutation_rates += [c2_sigma, c1_sigma]
-
-
-            offspring += [c1_chunks.flatten(), c2_chunks.flatten()]
-
-
-    return offspring, offspring_mutation_rates
-
-def random_crossover(parents, mutation_step_sizes, population_fitness):
-
-    offspring = []
-
-    offspring_mutation_rates = []
-
-    for i in range(0,len(parents), 2):
-
-        p1 = parents[i].copy()
-        p1_sigma = mutation_step_sizes[i]
-
-        p2 = parents[i+1].copy()
-        p2_sigma = mutation_step_sizes[i+1]
-
-        for j in range(10):
-
-            bools = np.random.choice(a=[False, True], size=p1.shape)
-
-            c1 = p1.copy()
-            c2 = p2.copy()
-
-            c1_sigma = p1_sigma.copy()
-            c2_sigma = p2_sigma.copy()
-
-            #perform the crossover based on a boolean map
-            for genome in range(len(bools)):
-                
-                #if True, swap the genome of the two parents
-                if bools[genome]:
-
-                    c1[genome], c2[genome] = c2[genome], c1[genome]
-
-
-            if np.random.uniform() < 0.5:
-
-                offspring_mutation_rates += [c1_sigma, c2_sigma]
-
-            else:
-
-                offspring_mutation_rates += [c2_sigma, c1_sigma]
-
-
-            offspring += [c1, c2]
-
-
-    return offspring, offspring_mutation_rates
-    
-# tournament
-def tournament(population, population_fitness):
-    
-    c1_index = np.random.randint(population_size)
-    c2_index = np.random.randint(population_size)
-
-    if population_fitness[c1_index] > population_fitness[c2_index]:
-        return c1_index
-    else:
-        return c2_index
 
 def main():
 
@@ -371,8 +225,10 @@ def main():
         #adapt stepsize sigma
         sigma = sigma * np.exp((cs/damps) * (np.linalg.norm(ps) / chiN - 1))
 
+
         #update B and D from C
         if counteval - eigeneval > population_size / (1 + cmu) / n_vars / 10:
+
             eigeneval = counteval
             C = np.triu(C,k=0) + np.triu(C, k=1)
             D_eye, B_eye = LA.eigh(C)
@@ -386,8 +242,7 @@ def main():
         #TODO: include break for satisfactory fitness
 
 
-generations_max = 50
-last_best = 0
+
 lowerbound = -1
 upperbound = 1
 population_size = 300
