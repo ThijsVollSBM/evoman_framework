@@ -14,6 +14,7 @@ from demo_controller import player_controller
 # imports other libs
 import numpy as np
 import os
+from scipy.linalg import eig
 
 # runs simulation
 def simulation(env,x):
@@ -274,6 +275,7 @@ def main():
 
     xmean = np.random.normal(size=(n_vars))
     sigma = 0.5
+    stopeval = 1000
 
 
 
@@ -300,76 +302,87 @@ def main():
     #calculate the effective size of mu
     mu_eff = sum(weights)**2/sum(weights**2)
 
-    """B = eye(N); % B defines the coordinate system
-        39 D = eye(N); % diagonal matrix D defines the scaling
-        40 C = B*D*(B*D)’; % covariance matrix
-        41 eigeneval = 0; % B and D updated at counteval == 0
-        42 chiN=Nˆ0.5*(1-1/(4*N)+1/(21*Nˆ2)); % expectation of
-        """
 
-    cc = (4+mu_eff/n_vars / (n_vars+4 + 2*mu_eff/n_vars))
+    ##########################################
+    # Strategy parameter setting: Adaptation #
+    ##########################################
+
+    cc = (4+mu_eff/n_vars) / (n_vars+4 + 2*mu_eff/n_vars)
 
     cs = (mu_eff+2) / (n_vars+mu_eff+5)
 
     c1 = 2 / (((n_vars+1.3)**2)+mu_eff)
 
-    cmu = min(1-c1, (2*(mu_eff-2+(1/mu_eff)) / ((((n_vars+2)**2)+2*mu_eff)/2))); # for rank-mu update
+    cmu = min(1-c1, (2*(mu_eff-2+(1/mu_eff)) / (((n_vars+2)**2)+2*mu_eff/2))); # for rank-mu update
 
-    pc = np.zeros((n_vars,)) 
-    ps = np.zeros((n_vars,)) 
+    damps = 1+2*max(0,np.sqrt((mu_eff -1)/(n_vars+1))-1) + cs
+
+    ##########################################
+    # initialize constants and strat params  #
+    ##########################################
+
+    pc = np.zeros((n_vars,1)) 
+    ps = np.zeros((n_vars,1)) 
 
     B_eye = np.identity(n_vars)
     D_eye = np.identity(n_vars)
 
-    C = B_eye*D_eye*(B_eye*D_eye).transpose()
+    C = B_eye @ D_eye@(B_eye@D_eye).T
 
     eigeneval = 0
 
     chiN = (n_vars**0.5)*(1-(1/(4*n_vars))+(1/(21*n_vars**2)))
 
-    print(chiN)
+    counteval = 0
 
-    offspring = np.zeros((offspring_size, n_vars))
+    while counteval < stopeval:
 
-    #generate and evaluate lambda amount of offspring:
+        counteval += 1
 
-    arz = np.random.normal(size=(offspring_size,n_vars))
+        offspring = np.zeros((offspring_size, n_vars))
 
-    arx = np.zeros(arz.shape)
+        #generate and evaluate lambda amount of offspring:
+        arz = np.random.normal(size=(offspring_size,n_vars))
+        arx = np.zeros(arz.shape)
 
-    for i in range(offspring_size):
+        for i in range(offspring_size):
 
-        arx[i] = xmean + sigma*(B_eye @ D_eye @ arz[i])
+            arx[i] = xmean + sigma*(B_eye @ D_eye @ arz[i])
 
-    offspring_fitness = evaluate(env, arx)
+        offspring_fitness = evaluate(env, arx)
 
+        #sort offspring, select mu amount of children, and recompute xmean and zmean
+        sorted_indices = np.argsort(-(offspring_fitness))
+        arx = arx[sorted_indices]
+        arz = arz[sorted_indices]
 
-    #sort offspring, select mu amount of children, and recompute xmean and zmean
+        xmean = np.dot(weights, arx[:mu])
+        zmean = np.dot(weights, arz[:mu])
 
-    sorted_indices = np.argsort(-(offspring_fitness))
-    arx = arx[sorted_indices]
-    arz = arz[sorted_indices]
+        #update evolution paths
 
-    xmean = np.dot(weights, arx[:mu])
-    zmean = np.dot(weights, arz[:mu])
+        ps = (1-cs)*ps + np.sqrt(cs*(2-cs)*mu_eff) * (B_eye @ zmean)
+        hsig = (np.linalg.norm(ps)/np.sqrt(1-(1-cs)**(counteval/population_size))) / chiN < 1.4+2/(n_vars+1)
 
-    ps = (1-cs)*ps + np.sqrt(cs*(2-cs)*mu_eff) * (B_eye @ zmean)
-    hsig = (np.linalg.norm(ps)/np.sqrt(1-(1-cs)**(counteval/population_size))) / chiN < 1.4+2/(n_vars+1)
+        pc = (1-cc)*pc + hsig * np.sqrt(cc*(2-cc)*mu_eff) * (B_eye@D_eye@zmean)
 
-    pc = (1-cc)*pc + hsig * np.sqrt(cc*(2-cc)*mu_eff) * (B_eye@D_eye@zmean)
-
-    C = (1-c1-cmu) * C + c1 * (pc*pc.transpose() + (1-hsig) * cc*(2-cc) * C) + cmu * (B_eye@D_eye@arz[:mu].transpose()) @ np.diag(weights) @ (B_eye@D_eye@arz[:mu].transpose()).T
+        C = (1-c1-cmu) * C + c1 * (pc@pc.transpose() + (1-hsig) * cc*(2-cc) * C) + cmu * ((B_eye@D_eye@arz[:mu].transpose()) @ np.diag(weights) @ (B_eye@D_eye@arz[:mu].transpose()).T)
     
+        #adapt stepsize sigma
+        sigma = sigma * np.exp((cs/damps) * (np.linalg.norm(ps) / chiN - 1))
 
-    """
-    % Adapt covariance matrix C
-    69 C = (1-c1-cmu) * C ... % regard old matrix % Eq. 47
-    70 + c1 * (pc*pc’ ... % plus rank one update
-    71 + (1-hsig) * cc*(2-cc) * C) ... % minor correction
-    72 + cmu ... % plus rank mu update
-    73 * (B*D*arz(:,arindex(1:mu))) ...
-    74 * diag(weights) * (B*D*arz(:,arindex(1:mu)))’;
-    """
+        #update B and D from C
+        if counteval - eigeneval > population_size / (1 + cmu) / n_vars / 10:
+            eigeneval = counteval
+            C = np.triu(C,k=0) + np.triu(C, k=1)
+            B_eye,D_eye = eig(C)
+            D_eye = np.diag(np.sqrt(np.diag(D_eye)))
+
+        #TODO: include break for satisfactory fitness
+        print(max(offspring_fitness))
+        print(min(offspring_fitness))
+
+
 
 generations_max = 50
 last_best = 0
