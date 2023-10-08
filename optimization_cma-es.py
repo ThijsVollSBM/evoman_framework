@@ -131,8 +131,6 @@ def main():
     sigma = 0.5
     stopeval = 1000
 
-
-
     #########################################
     # Strategy parameter setting: Selection #
     #########################################
@@ -175,8 +173,9 @@ def main():
     # initialize constants and strat params  #
     ##########################################
 
-    pc = np.zeros((n_vars,1)) 
-    ps = np.zeros((n_vars,1)) 
+    pc = np.zeros((1,n_vars)) 
+    
+    ps = np.zeros((1,n_vars))
 
     B_eye = np.identity(n_vars)
     D_eye = np.identity(n_vars)
@@ -194,15 +193,19 @@ def main():
         counteval += 1
 
         #generate and evaluate lambda amount of offspring:
-        arz = np.random.normal(size=(offspring_size,n_vars))
+        arz = np.zeros((offspring_size,n_vars))       
         arx = np.zeros(arz.shape)
 
         for i in range(offspring_size):
 
-            arx[i] = xmean + sigma*(B_eye @ D_eye @ arz[i])
-            
+            arz[i] = np.random.normal(0,1,size=(1,265))
 
+            Yk = arz[i] @ (B_eye * D_eye)                        #eq. 39
+            
+            arx[i] = xmean + sigma * Yk                            #eq. 40
+            
         offspring_fitness = evaluate(env, arx)
+        
 
         #sort offspring, select mu amount of children, and recompute xmean and zmean
         sorted_indices = np.argsort(-offspring_fitness)
@@ -210,27 +213,30 @@ def main():
         arz = arz[sorted_indices]
 
         xmean = np.dot(weights, arx[:mu])
-        
         zmean = np.dot(weights, arz[:mu])
 
+
         #update evolution paths
+        ps = (1-cs)*ps + (np.sqrt(cs*(2-cs)*mu_eff)) * (B_eye @ zmean)  #eq. 43
+        hsig = (np.linalg.norm(ps)/np.sqrt(1-(1-cs)**(2*counteval/population_size))) / chiN < 1.4+2/(n_vars+1)
 
-        ps = (1-cs)*ps + np.sqrt(cs*(2-cs)*mu_eff) * (B_eye @ zmean)
-        hsig = (np.linalg.norm(ps)/np.sqrt(1-(1-cs)**(counteval/population_size))) / chiN < 1.4+2/(n_vars+1)
+        pc = (1-cc)*pc + hsig * np.sqrt(cc*(2-cc)*mu_eff) * (B_eye * D_eye@zmean)
 
-        pc = (1-cc)*pc + hsig * np.sqrt(cc*(2-cc)*mu_eff) * (B_eye@D_eye@zmean)
+        element1 = (1-c1-cmu) * C
+        element2 = c1 * (pc*pc.T) + (1-hsig) * cc*(2-cc) * C
+        #element3 = cmu * ((B_eye * D_eye@arz[:mu].transpose()) * np.diag(weights) * (B_eye * D_eye@arz[:mu].transpose()).T)
+        #rank_mu_update = (1-cmu(np))
 
-        C = (1-c1-cmu) * C + c1 * (pc@pc.transpose() + (1-hsig) * cc*(2-cc) * C) + cmu * ((B_eye@D_eye@arz[:mu].transpose()) @ np.diag(weights) @ (B_eye@D_eye@arz[:mu].transpose()).T)
-    
+        C = element1 + element2
+        
         #adapt stepsize sigma
         sigma = sigma * np.exp((cs/damps) * (np.linalg.norm(ps) / chiN - 1))
-
 
         #update B and D from C
         if counteval - eigeneval > population_size / (1 + cmu) / n_vars / 10:
 
             eigeneval = counteval
-            C = np.triu(C,k=0) + np.triu(C, k=1)
+            C = np.tril(C) + np.triu(C.T, 1)
             D_eye, B_eye = LA.eigh(C)
             D_eye = np.diag(np.sqrt(np.diag(D_eye)))
 
@@ -238,14 +244,29 @@ def main():
         """in MatLab, the eig function returns eigenvectors, eigenvalues,  
         but numpy returns eigenvalues, eigenvectors so flipped the return statement"""
 
-
         #TODO: include break for satisfactory fitness
+
+
+        population_fitness = offspring_fitness
+        #mean of the population performance
+        mean = np.mean(population_fitness)
+
+        #std of the population performance
+        std = np.std(population_fitness)
+
+        #index of the best_solution
+        best_solution_index = np.argmax(population_fitness)
+
+        #fitness of this individual
+        best_fitness = population_fitness[best_solution_index]
+
+        save_results(experiment_name=experiment_name, ini_g=counteval, best=best_fitness, mean=mean, std=std)
 
 
 
 lowerbound = -1
 upperbound = 1
-population_size = 300
+population_size = 1000
 
 
 
