@@ -16,21 +16,14 @@ import numpy as np
 import os
 from numpy import linalg as LA
 
-def cons_multi_patch(values):
-        print(values)
-        return values.mean() - values.std()
-
-
 # runs simulation
 def simulation(env,x):
     f,p,e,t = env.play(pcont=x)
-
     return f
 
 # evaluation
 def evaluate(env, x):
     return np.array(list(map(lambda y: simulation(env,y), x)))
-
 
 def initialize_population(env, experiment_name, lowerbound, upperbound,
                             population_size, n_vars):
@@ -106,7 +99,7 @@ def main():
     # initializes simulation in individual evolution mode, for single static enemy.
     
     env = Environment(experiment_name=experiment_name,
-                    enemies=[7,8],
+                    enemies=[2,3,4,5,6,7,8],
                     playermode="ai",
                     player_controller=player_controller(n_hidden_neurons), # you  can insert your own controller here
                     enemymode="static",
@@ -114,8 +107,6 @@ def main():
                     level=2,
                     speed="fastest",
                     visuals=False)
-    
-    env.cons_multi = cons_multi_patch
 
     # number of weights for multilayer with 10 hidden neurons
     n_vars = (env.get_num_sensors()+1)*n_hidden_neurons + (n_hidden_neurons+1)*5
