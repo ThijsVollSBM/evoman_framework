@@ -17,15 +17,25 @@ import os
 from numpy import linalg as LA
 
 def cons_multi_patch(values):
-        print(values)
-        return values.mean() - values.std()
+
+        return values
 
 
 # runs simulation
-def simulation(env,x):
-    f,p,e,t = env.play(pcont=x)
+def simulation(env,x, evaluate_best = False):
 
-    return f
+    if not evaluate_best:
+        f,p,e,t = env.play(pcont=x)
+
+        return f.mean() - f.std()
+    else:
+        f,p,e,t = env.play(pcont=x)
+        print('player life:')
+        print(p)
+        print('enemy_life:')
+        print(e)
+
+        
 
 # evaluation
 def evaluate(env, x):
@@ -269,6 +279,11 @@ def main():
 
         #index of the best_solution
         best_solution_index = np.argmax(population_fitness)
+
+        best_gene = arx[best_solution_index]
+
+        simulation(env,best_gene, evaluate_best = True)
+
 
         #fitness of this individual
         best_fitness = population_fitness[best_solution_index]
