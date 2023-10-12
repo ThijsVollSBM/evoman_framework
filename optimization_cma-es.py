@@ -25,16 +25,6 @@ def simulation(env,x):
 def evaluate(env, x):
     return np.array(list(map(lambda y: simulation(env,y), x)))
 
-# update mutation rate
-def update_mutation_rate(mutation_rates, overall_LR, coordinate_LR):
-
-    step_overall_LR = overall_LR*np.random.normal(0,1)
-
-    step_coordinate_LR = coordinate_LR*np.random.normal(0,1,(len(mutation_rates),1))
-
-    return mutation_rates * np.exp(step_overall_LR+step_coordinate_LR)
-
-
 def initialize_population(env, experiment_name, lowerbound, upperbound,
                             population_size, n_vars):
 
@@ -80,6 +70,16 @@ def save_results(experiment_name, ini_g, best, mean, std):
         file.write('\n\ngen best mean std')
         file.write('\n'+str(ini_g)+' '+str(round(best,6))+' '+str(round(mean,6))+' '+str(round(std,6))   )
 
+def dot_itself(matrix):
+    
+    matrix_list = []
+    
+    for vector in matrix:
+        
+        new_matrix = np.outer(vector, vector.T)
+        matrix_list.append(new_matrix)
+        
+    return np.stack(matrix_list, axis = 0)
 
 def main():
 
@@ -99,7 +99,7 @@ def main():
     # initializes simulation in individual evolution mode, for single static enemy.
     
     env = Environment(experiment_name=experiment_name,
-                    enemies=[7,8],
+                    enemies=[2,3,4,5,6,7,8],
                     playermode="ai",
                     player_controller=player_controller(n_hidden_neurons), # you  can insert your own controller here
                     enemymode="static",
@@ -129,13 +129,12 @@ def main():
 
     xmean = np.random.normal(size=(n_vars))
     sigma = 0.5
-    stopeval = 1000
+    stopeval = 1000000
 
     #########################################
     # Strategy parameter setting: Selection #
     #########################################
     
-
     #calculate lambda population size
     offspring_size = int(4 + np.floor(3*np.log(n_vars)))
 
@@ -187,16 +186,20 @@ def main():
     chiN = (n_vars**0.5)*(1-(1/(4*n_vars))+(1/(21*n_vars**2)))
 
     counteval = 0
+    
+    generation = 0
 
     while counteval < stopeval:
-
-        counteval += 1
+        
+        generation += 1
 
         #generate and evaluate lambda amount of offspring:
         arz = np.zeros((offspring_size,n_vars))       
         arx = np.zeros(arz.shape)
 
         for i in range(offspring_size):
+            
+            counteval += 1
 
             arz[i] = np.random.normal(0,1,size=(1,265))
 
@@ -222,12 +225,13 @@ def main():
 
         pc = (1-cc)*pc + hsig * np.sqrt(cc*(2-cc)*mu_eff) * (B_eye * D_eye@zmean)
 
-        element1 = (1-c1-cmu) * C
-        element2 = c1 * (pc*pc.T) + (1-hsig) * cc*(2-cc) * C
+        element1 = (1-c1-cmu) * C   #can be close or equal to 0
+        element2 = c1 * (pc*pc.T + (1-hsig) * cc*(2-cc) * C)   #rank-one update
+        element3 = cmu*(np.sum(dot_itself(arz[:mu]) * weights[:, np.newaxis, np.newaxis], axis = 0))
+        
         #element3 = cmu * ((B_eye * D_eye@arz[:mu].transpose()) * np.diag(weights) * (B_eye * D_eye@arz[:mu].transpose()).T)
-        #rank_mu_update = (1-cmu(np))
 
-        C = element1 + element2
+        C = element1 + element2 + element3
         
         #adapt stepsize sigma
         sigma = sigma * np.exp((cs/damps) * (np.linalg.norm(ps) / chiN - 1))
@@ -260,13 +264,13 @@ def main():
         #fitness of this individual
         best_fitness = population_fitness[best_solution_index]
 
-        save_results(experiment_name=experiment_name, ini_g=counteval, best=best_fitness, mean=mean, std=std)
+        save_results(experiment_name=experiment_name, ini_g=generation, best=best_fitness, mean=mean, std=std)
 
 
 
 lowerbound = -1
 upperbound = 1
-population_size = 1000
+population_size = 20
 
 
 
