@@ -1,0 +1,15 @@
+emeny 1 - shoots single shot with terrain
+
+enemy 2,3 - shoots that hovers then comes on flat ground
+
+enemy 4 - shoots cluster straight away
+enemy 5 - shoots rolling barrel straight away
+enemy 6 - drops barrels from the top
+enemy 7 - SPIKES ON TOP!
+enemy 8 - shoots multile bullets with terrain
+
+groups: enemy 1,8 enemy 2,3, 4 enemy 7 distinct enemy 
+
+select enemy 4,7,8
+
+select enemy 5,6,3

@@ -8,6 +8,8 @@
 # imports framework
 import sys
 
+import time
+
 from evoman.environment import Environment
 from demo_controller import player_controller
 
@@ -21,25 +23,89 @@ def cons_multi_patch(values):
         return values
 
 
-# runs simulation
-def simulation(env,x, evaluate_best = False):
+def simulation(env,x, evaluate_best=False):
+
+    global enemy_weights
+
+    f,p,e,t = env.play(pcont=x)
 
     if not evaluate_best:
-        f,p,e,t = env.play(pcont=x)
-
-        return f.mean() - f.std()
+        return f, e
+    
     else:
-        f,p,e,t = env.play(pcont=x)
+
+        print(80*'*')
+        print('\n')
         print('player life:')
         print(p)
-        print('enemy_life:')
+        print('enemy life:')
         print(e)
+        print('\n')
+        print(f'vanilla player fitness:\t {f.mean() - f.std()}')
+    
 
-        
+def calculate_weighted_fitness(vector):
 
-# evaluation
+    global enemy_weights
+
+    weighted_fitness =  vector * (enemy_weights*len(enemy_weights))
+    
+    return np.average(weighted_fitness) - np.std(weighted_fitness)
+
+
+def calculate_weighted_scores(vector):
+
+    global enemy_weights
+
+    scores = (10000 - np.square(vector)) * (enemy_weights*len(enemy_weights))
+
+    avg_score = np.average(scores)
+
+    kill_scores = np.count_nonzero(vector==0)*10000
+
+    return avg_score+ kill_scores
+    
+
 def evaluate(env, x):
-    return np.array(list(map(lambda y: simulation(env,y), x)))
+
+    global enemy_weights
+
+    enemy_life_vectors = []
+
+    fitness_vectors = []
+
+    for gene in x:
+
+        v_fitness, v_enemy_life = simulation(env, gene)
+
+        #print(v_fitness.mean() - v_fitness.std())
+
+        enemy_life_vectors.append(v_enemy_life)
+
+        if v_enemy_life.sum() == 0:
+            
+            np.savetxt(f'all_enemies_beat_{time.strftime("%Y%m%d-%H%M%S")}.txt', gene)
+
+        fitness_vectors.append(v_fitness)
+
+    avg_enemy_life = np.vstack(enemy_life_vectors).mean(axis=0)
+    
+    norm_enemy_life = avg_enemy_life/avg_enemy_life.sum()
+
+    wA = 0.6
+    wB = 0.4
+
+    enemy_weights = (enemy_weights * wA) + (norm_enemy_life * wB)
+
+    scores = np.array(list(map(lambda y: calculate_weighted_scores(y), enemy_life_vectors)))
+
+    if scores.sum() == 0:
+
+        return np.array(list(map(lambda y: calculate_weighted_fitness(y), fitness_vectors)))
+    
+    else:
+
+        return np.array(list(map(lambda y: calculate_weighted_scores(y), enemy_life_vectors)))
 
 
 def initialize_population(env, experiment_name, lowerbound, upperbound,
@@ -54,7 +120,7 @@ def initialize_population(env, experiment_name, lowerbound, upperbound,
         mutation_step_size = np.random.uniform(lowerbound, upperbound, (population_size, 1))
 
         population_fitness = evaluate(env,population)
-
+        
         ini_g = 0
         solutions = [population, population_fitness, mutation_step_size]
         env.update_solutions(solutions)
@@ -78,6 +144,7 @@ def initialize_population(env, experiment_name, lowerbound, upperbound,
 
     return population, population_fitness, mutation_step_size, ini_g
 
+
 def save_results(experiment_name, ini_g, best, mean, std):
     # saves results for first pop
 
@@ -86,6 +153,7 @@ def save_results(experiment_name, ini_g, best, mean, std):
     with open(experiment_name+'/results.txt','a') as file:
         file.write('\n\ngen best mean std')
         file.write('\n'+str(ini_g)+' '+str(round(best,6))+' '+str(round(mean,6))+' '+str(round(std,6))   )
+
 
 def dot_itself(matrix):
     
@@ -98,7 +166,8 @@ def dot_itself(matrix):
         
     return np.stack(matrix_list, axis = 0)
 
-def main():
+
+def main(enemies_list):
 
     # choose this for not using visuals and thus making experiments faster
     headless = True
@@ -116,7 +185,7 @@ def main():
     # initializes simulation in individual evolution mode, for single static enemy.
     
     env = Environment(experiment_name=experiment_name,
-                    enemies=[7,8],
+                    enemies=enemies_list,
                     playermode="ai",
                     player_controller=player_controller(n_hidden_neurons), # you  can insert your own controller here
                     enemymode="static",
@@ -124,14 +193,20 @@ def main():
                     level=2,
                     speed="fastest",
                     visuals=False)
+
     
     env.cons_multi = cons_multi_patch
 
     # number of weights for multilayer with 10 hidden neurons
     n_vars = (env.get_num_sensors()+1)*n_hidden_neurons + (n_hidden_neurons+1)*5
 
-
     # start writing your own code from here
+
+    global enemy_weights
+
+    #enemy_weights = np.ones(len(enemies_list))
+
+    enemy_weights = np.array([0.5, 0, 0, 0.5, 0, 0, 0, 0])/len(enemies_list)
 
     #initialize population
     population, population_fitness, mutation_step_sizes, generation = initialize_population(env=env, 
@@ -142,6 +217,8 @@ def main():
                                                                        n_vars=n_vars
                                                                        )
 
+    overall_best = 0
+
     #########################################
     #    User defined input parameters      #
     #########################################
@@ -149,7 +226,7 @@ def main():
     xmean = np.random.normal(size=(n_vars))
     sigma = 0.5
     stopeval = 1000000
-
+    
     #########################################
     # Strategy parameter setting: Selection #
     #########################################
@@ -227,12 +304,15 @@ def main():
             arx[i] = xmean + sigma * Yk                            #eq. 40
             
         offspring_fitness = evaluate(env, arx)
-        
+    
+       
 
         #sort offspring, select mu amount of children, and recompute xmean and zmean
         sorted_indices = np.argsort(-offspring_fitness)
         arx = arx[sorted_indices]
         arz = arz[sorted_indices]
+        offspring_fitness = offspring_fitness[sorted_indices]
+  
 
         xmean = np.dot(weights, arx[:mu])
         zmean = np.dot(weights, arz[:mu])
@@ -253,7 +333,7 @@ def main():
         C = element1 + element2 + element3
         
         #adapt stepsize sigma
-        sigma = sigma * np.exp((cs/damps) * (np.linalg.norm(ps) / chiN - 1))
+        #sigma = sigma * np.exp((cs/damps) * (np.linalg.norm(ps) / chiN - 1))
 
         #update B and D from C
         if counteval - eigeneval > population_size / (1 + cmu) / n_vars / 10:
@@ -267,9 +347,6 @@ def main():
         """in MatLab, the eig function returns eigenvectors, eigenvalues,  
         but numpy returns eigenvalues, eigenvectors so flipped the return statement"""
 
-        #TODO: include break for satisfactory fitness
-
-
         population_fitness = offspring_fitness
         #mean of the population performance
         mean = np.mean(population_fitness)
@@ -280,15 +357,26 @@ def main():
         #index of the best_solution
         best_solution_index = np.argmax(population_fitness)
 
-        best_gene = arx[best_solution_index]
+        best_gene = arx[0]
 
         simulation(env,best_gene, evaluate_best = True)
-
-
+    
         #fitness of this individual
         best_fitness = population_fitness[best_solution_index]
 
+        if best_fitness > overall_best:
+            overall_best = best_fitness
+            np.savetxt('best_cma.txt', arx[0])
+
+        print(f'overall_best: \t \t {overall_best}')
         save_results(experiment_name=experiment_name, ini_g=generation, best=best_fitness, mean=mean, std=std)
+
+        """
+        if generation % 10 == 0:
+            print('enemy weights:')
+            print(enemy_weights)
+            """
+
 
 
 
@@ -301,4 +389,5 @@ population_size = 20
 
 
 if __name__ == '__main__':
-    main()
+    enemies = [1,2,3,4,5,6,7,8]
+    main(enemies)

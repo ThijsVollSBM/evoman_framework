@@ -9,6 +9,7 @@
 import sys
 
 from evoman.environment import Environment
+import pandas as pd
 from demo_controller import player_controller
 
 # imports other libs
@@ -17,13 +18,21 @@ import os
 from numpy import linalg as LA
 
 # runs simulation
-def simulation(env,x):
+def simulation(env,x, mode='notgain'):
+
     f,p,e,t = env.play(pcont=x)
-    return f
+
+    if mode != 'gain':
+        return f
+    
+    elif mode == 'gain':
+
+        return f, p, e, t
 
 # evaluation
 def evaluate(env, x):
     return np.array(list(map(lambda y: simulation(env,y), x)))
+
 
 def initialize_population(env, experiment_name, lowerbound, upperbound,
                             population_size, n_vars):
@@ -61,14 +70,16 @@ def initialize_population(env, experiment_name, lowerbound, upperbound,
 
     return population, population_fitness, mutation_step_size, ini_g
 
-def save_results(experiment_name, ini_g, best, mean, std):
+
+def save_results(experiment_name, ini_g, best, mean, std, enemy_index, run_nr):
     # saves results for first pop
 
-    print( '\n GENERATION '+str(ini_g)+' '+str(round(best,6))+' '+str(round(mean,6))+' '+str(round(std,6)))
+    print( '\n GENERATION '+str(ini_g)+' '+str(round(best,6))+' '+str(round(mean,6))+' '+str(round(std,6))+' '+str(enemy_index)+' '+str(run_nr))
 
     with open(experiment_name+'/results.txt','a') as file:
         file.write('\n\ngen best mean std')
         file.write('\n'+str(ini_g)+' '+str(round(best,6))+' '+str(round(mean,6))+' '+str(round(std,6))   )
+
 
 def dot_itself(matrix):
     
@@ -81,7 +92,10 @@ def dot_itself(matrix):
         
     return np.stack(matrix_list, axis = 0)
 
-def main():
+
+def main(enemy_index, run_nr):
+
+    global enemies_dict
 
     # choose this for not using visuals and thus making experiments faster
     headless = True
@@ -99,7 +113,7 @@ def main():
     # initializes simulation in individual evolution mode, for single static enemy.
     
     env = Environment(experiment_name=experiment_name,
-                    enemies=[2,3,4,5,6,7,8],
+                    enemies=enemies_dict[enemy_index],
                     playermode="ai",
                     player_controller=player_controller(n_hidden_neurons), # you  can insert your own controller here
                     enemymode="static",
@@ -111,6 +125,8 @@ def main():
     # number of weights for multilayer with 10 hidden neurons
     n_vars = (env.get_num_sensors()+1)*n_hidden_neurons + (n_hidden_neurons+1)*5
 
+    overall_best = -1000
+    overall_best_gene = 0
 
     # start writing your own code from here
 
@@ -129,7 +145,7 @@ def main():
 
     xmean = np.random.normal(size=(n_vars))
     sigma = 0.5
-    stopeval = 1000000
+    stopeval = 1000
 
     #########################################
     # Strategy parameter setting: Selection #
@@ -189,7 +205,7 @@ def main():
     
     generation = 0
 
-    while counteval < stopeval:
+    while generation < stopeval:
         
         generation += 1
 
@@ -212,6 +228,7 @@ def main():
 
         #sort offspring, select mu amount of children, and recompute xmean and zmean
         sorted_indices = np.argsort(-offspring_fitness)
+        offspring_fitness = offspring_fitness[sorted_indices]
         arx = arx[sorted_indices]
         arz = arz[sorted_indices]
 
@@ -250,7 +267,6 @@ def main():
 
         #TODO: include break for satisfactory fitness
 
-
         population_fitness = offspring_fitness
         #mean of the population performance
         mean = np.mean(population_fitness)
@@ -264,7 +280,28 @@ def main():
         #fitness of this individual
         best_fitness = population_fitness[best_solution_index]
 
-        save_results(experiment_name=experiment_name, ini_g=generation, best=best_fitness, mean=mean, std=std)
+        dicty = {'mean':mean, 
+                 'best':best_fitness, 
+                 'std':std, 
+                 'generation':generation, 
+                 'overall best':overall_best, 
+                 'enemies index': enemy_index}
+        
+        data.append(dicty)
+
+        save_results(experiment_name=experiment_name, ini_g=generation, best=best_fitness, mean=mean, std=std, enemy_index=enemy_index, run_nr=run_nr)
+
+        if best_fitness > overall_best:
+            overall_best_gene = arx[0]
+            overall_best = best_fitness
+
+    #index of the best_solution
+    best_solution_index = np.argmax(population_fitness)
+
+    np.savetxt(f'best_static_eval_gene_enemy_index_{enemy_index}_run_nr{run_nr}.txt',overall_best_gene)
+
+    return 1
+
 
 
 
@@ -273,8 +310,34 @@ upperbound = 1
 population_size = 20
 
 
-
-
-
 if __name__ == '__main__':
-    main()
+
+    mean_gains_for_all_enemies = dict()
+
+    enemies_dict = {'1':[4,7,8], '2':[5,6,3]}
+
+    enemies_index = 0
+
+    mean_gains = []
+
+    data = []
+
+    for enemy in enemies_dict.keys():
+
+        for run_nr in range(0,10):
+
+            mean_gain = main(enemy, run_nr)
+
+            gains_dict = {'enemy': enemy, 'run_nr': run_nr, 'gains': mean_gain}
+
+            mean_gains.append(gains_dict )
+
+        results = pd.DataFrame.from_records(data)
+
+        filename = f'results/enemy_{enemy}_results_cma_static_eval.csv'
+
+        results.to_csv(filename)
+
+    gains_df = pd.DataFrame.from_records(mean_gains)
+
+    gains_df.to_csv('results/mean_gains_static_eval.csv')
